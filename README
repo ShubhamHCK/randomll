@@ -1,0 +1,153 @@
+# Credit Scoring & Fraud Detection — Two-Dashboard MLOps Starter
+
+This repository contains **two separate dashboards** backed by one FastAPI service, extended with a **Model-Quality Monitoring & Retraining Workflow (MLOps MSE-2)**:
+- **Credit Scoring dashboard:** estimates probability of loan default and returns a risk band.
+- **Fraud Detection dashboard:** estimates transaction fraud probability and returns a review decision.
+- **Monitoring & Retraining Pipeline:** validates incoming batches, evaluates registered Champion models, trains isolated Candidate models, and enforces a quality gate via MLflow. *(See full assessment documentation in [MSE2_RETRAINING.md](./MSE2_RETRAINING.md))*
+
+The project follows an end-to-end MLOps engineering pattern:
+`training script → saved model & MLflow registry → FastAPI model serving → monitoring & retraining → pytest → Docker → GitHub Actions`
+
+## Important data note
+The included training and monitoring scripts use **synthetic demonstration data**. The models are useful for testing the end-to-end pipeline, dashboard, and model-governance workflows, **not for real lending or fraud decisions**. Replace the synthetic generators with appropriately licensed, documented datasets and perform fairness, privacy, security, calibration and domain validation before any real use.
+
+## 1. Requirements
+- Python 3.11+ (3.13 recommended)
+- Node.js 20+
+- Git
+- Docker Desktop (optional)
+
+## 2. Run locally on Windows
+
+### Backend
+Open a terminal in the project root:
+
+```powershell
+py -3.13 -m venv .venv
+.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -r backend/requirements.txt
+python -m src.train_credit
+python -m src.train_fraud
+uvicorn backend.main:app --reload
+```
+
+API: http://127.0.0.1:8000  
+Swagger docs: http://127.0.0.1:8000/docs
+
+### Frontend
+Open a second terminal:
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+Open http://localhost:5173
+
+Use the left navigation to switch between the **Credit Scoring Dashboard** and the **Fraud Detection Dashboard**. They are separate dashboard views, not a combined analytics page.
+
+## 3. Train & Monitor
+
+### Initial Training
+From the project root, with the virtual environment activated:
+
+```powershell
+python -m src.train_credit
+python -m src.train_fraud
+```
+
+### Model-Quality Monitoring & Retraining (MSE-2)
+Run the automated monitoring, candidate retraining, and quality-gate workflow:
+
+```powershell
+python -m src.monitor_retrain
+```
+
+👉 **Detailed workflow, metrics, quality-gate rules, and execution evidence:** [MSE2_RETRAINING.md](./MSE2_RETRAINING.md)
+
+Models and evaluation JSON files are written to `artifacts/` and `reports/`. MLflow tracking is enabled locally under `mlruns/`.
+
+To view MLflow:
+
+```powershell
+python -m mlflow ui --backend-store-uri ./mlruns --host 0.0.0.0 --port 5000
+```
+
+Then open http://127.0.0.1:5000.
+
+## 4. Run tests
+
+```powershell
+python -m pytest -v
+```
+
+Tests use fake models and do not require the MLflow server to be running.
+
+## 5. Docker
+
+The Docker setup builds the backend and frontend separately:
+
+```powershell
+docker compose up --build
+```
+
+Frontend: http://localhost:5173  
+API docs: http://localhost:8000/docs
+
+For Docker, train the models locally first so the `artifacts/` folder exists:
+
+```powershell
+python -m src.train_credit
+python -m src.train_fraud
+docker compose up --build
+```
+
+## 6. Project structure
+
+```text
+credit-fraud-two-dashboards/
+├── backend/
+│   ├── main.py
+│   └── requirements.txt
+├── frontend/
+│   ├── src/
+│   │   ├── App.jsx
+│   │   ├── api.js
+│   │   └── styles.css
+│   ├── Dockerfile
+│   ├── package.json
+│   └── vite.config.js
+├── src/
+│   ├── train_credit.py
+│   ├── train_fraud.py
+│   ├── monitor_retrain.py     # MSE-2 monitoring & retraining pipeline
+│   └── model_utils.py
+├── tests/
+│   └── test_api.py
+├── artifacts/                 # champion & candidate models
+│   └── candidates/
+├── reports/                   # JSON evaluation & quality-gate reports
+├── .github/workflows/ci.yml
+├── docker-compose.yml
+├── Dockerfile
+├── MSE2_RETRAINING.md         # MLOps Practical Assessment (Tasks A–E)
+└── README.md
+```
+
+## Next milestones (not yet implemented)
+1. Replace synthetic data with real, properly licensed datasets.
+2. Add a database for prediction history (current API history is in-memory).
+3. Automate canary rollouts and registry alias promotion once candidates pass the quality gate.
+4. Add drift/performance monitoring with Evidently or a similar tool.
+5. Add authentication, role-based access, audit logging and deployment to AWS.
+6. Add a separate Fraud Detection frontend deployment later if you want each dashboard hosted independently.
+
+## API endpoints
+- `GET /health`
+- `GET /api/credit/metrics`
+- `POST /api/credit/predict`
+- `GET /api/fraud/metrics`
+- `POST /api/fraud/predict`
+- `GET /api/history?domain=credit|fraud`
